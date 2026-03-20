@@ -2,129 +2,133 @@ import java.util.*;
 
 public class week1andweek2 {
 
-    // Parking spot structure
-    class ParkingSpot {
-        String licensePlate;
-        long entryTime;
-        String status; // EMPTY, OCCUPIED, DELETED
+    // Transaction class
+    static class Transaction {
+        int id;
+        int amount;
+        String merchant;
+        String account;
+        long time; // in milliseconds
 
-        public ParkingSpot() {
-            status = "EMPTY";
+        public Transaction(int id, int amount, String merchant, String account, long time) {
+            this.id = id;
+            this.amount = amount;
+            this.merchant = merchant;
+            this.account = account;
+            this.time = time;
         }
     }
 
-    private ParkingSpot[] table;
-    private int capacity = 500;
-    private int size = 0;
+    private List<Transaction> transactions;
 
-    // Statistics
-    private int totalProbes = 0;
-    private int totalParks = 0;
-
-    // Constructor
     public week1andweek2() {
-        table = new ParkingSpot[capacity];
-        for (int i = 0; i < capacity; i++) {
-            table[i] = new ParkingSpot();
+        transactions = new ArrayList<>();
+    }
+
+    public void addTransaction(Transaction t) {
+        transactions.add(t);
+    }
+
+    // 1. Classic Two-Sum
+    public void findTwoSum(int target) {
+        HashMap<Integer, Transaction> map = new HashMap<>();
+
+        System.out.println("Two-Sum Results:");
+        for (Transaction t : transactions) {
+            int complement = target - t.amount;
+
+            if (map.containsKey(complement)) {
+                Transaction t2 = map.get(complement);
+                System.out.println("(" + t2.id + ", " + t.id + ")");
+            }
+            map.put(t.amount, t);
         }
     }
 
-    // Hash function
-    private int hash(String licensePlate) {
-        int hash = 0;
-        for (char ch : licensePlate.toCharArray()) {
-            hash = (hash * 31 + ch) % capacity;
-        }
-        return hash;
-    }
+    // 2. Two-Sum within 1 hour
+    public void findTwoSumWithTime(int target) {
+        HashMap<Integer, List<Transaction>> map = new HashMap<>();
 
-    // Park vehicle using linear probing
-    public void parkVehicle(String licensePlate) {
-        int index = hash(licensePlate);
-        int probes = 0;
+        System.out.println("\nTwo-Sum within 1 hour:");
+        for (Transaction t : transactions) {
+            int complement = target - t.amount;
 
-        while (table[index].status.equals("OCCUPIED")) {
-            index = (index + 1) % capacity; // linear probing
-            probes++;
-        }
-
-        table[index].licensePlate = licensePlate;
-        table[index].entryTime = System.currentTimeMillis();
-        table[index].status = "OCCUPIED";
-
-        size++;
-        totalProbes += probes;
-        totalParks++;
-
-        System.out.println("Assigned spot #" + index +
-                " (" + probes + " probes)");
-    }
-
-    // Exit vehicle
-    public void exitVehicle(String licensePlate) {
-        int index = hash(licensePlate);
-        int probes = 0;
-
-        while (!table[index].status.equals("EMPTY")) {
-            if (table[index].status.equals("OCCUPIED") &&
-                    table[index].licensePlate.equals(licensePlate)) {
-
-                long exitTime = System.currentTimeMillis();
-                long durationMillis = exitTime - table[index].entryTime;
-
-                double hours = durationMillis / (1000.0 * 60 * 60);
-
-                double fee = hours * 5.0; // $5 per hour
-
-                table[index].status = "DELETED";
-                size--;
-
-                System.out.printf("Spot #%d freed, Duration: %.2f hours, Fee: $%.2f\n",
-                        index, hours, fee);
-                return;
+            if (map.containsKey(complement)) {
+                for (Transaction prev : map.get(complement)) {
+                    if (Math.abs(t.time - prev.time) <= 3600000) { // 1 hour
+                        System.out.println("(" + prev.id + ", " + t.id + ")");
+                    }
+                }
             }
 
-            index = (index + 1) % capacity;
-            probes++;
+            map.putIfAbsent(t.amount, new ArrayList<>());
+            map.get(t.amount).add(t);
         }
-
-        System.out.println("Vehicle not found");
     }
 
-    // Find nearest available spot from entrance (index 0)
-    public int findNearestSpot() {
-        for (int i = 0; i < capacity; i++) {
-            if (!table[i].status.equals("OCCUPIED")) {
-                return i;
+    // 3. K-Sum (recursive)
+    public void findKSum(int k, int target) {
+        System.out.println("\nK-Sum Results:");
+        kSumHelper(0, k, target, new ArrayList<>());
+    }
+
+    private void kSumHelper(int start, int k, int target, List<Integer> path) {
+        if (k == 0 && target == 0) {
+            System.out.println(path);
+            return;
+        }
+
+        if (k == 0 || target < 0) return;
+
+        for (int i = start; i < transactions.size(); i++) {
+            path.add(transactions.get(i).id);
+            kSumHelper(i + 1, k - 1,
+                    target - transactions.get(i).amount, path);
+            path.remove(path.size() - 1);
+        }
+    }
+
+    // 4. Duplicate Detection
+    public void detectDuplicates() {
+        HashMap<String, List<Transaction>> map = new HashMap<>();
+
+        for (Transaction t : transactions) {
+            String key = t.amount + "-" + t.merchant;
+
+            map.putIfAbsent(key, new ArrayList<>());
+            map.get(key).add(t);
+        }
+
+        System.out.println("\nDuplicate Transactions:");
+        for (String key : map.keySet()) {
+            List<Transaction> list = map.get(key);
+
+            Set<String> accounts = new HashSet<>();
+            for (Transaction t : list) {
+                accounts.add(t.account);
+            }
+
+            if (accounts.size() > 1 && list.size() > 1) {
+                System.out.println(key + " → Accounts: " + accounts);
             }
         }
-        return -1;
-    }
-
-    // Get statistics
-    public void getStatistics() {
-        double occupancy = (size * 100.0) / capacity;
-        double avgProbes = totalParks == 0 ? 0 : (double) totalProbes / totalParks;
-
-        System.out.println("\n=== Parking Statistics ===");
-        System.out.printf("Occupancy: %.2f%%\n", occupancy);
-        System.out.printf("Average Probes: %.2f\n", avgProbes);
-        System.out.println("Peak Hour: 2-3 PM (simulated)");
     }
 
     // Main method
     public static void main(String[] args) {
 
-        week1andweek2 parking = new week1andweek2();
+        week1andweek2 system = new week1andweek2();
 
-        parking.parkVehicle("ABC-1234");
-        parking.parkVehicle("ABC-1235");
-        parking.parkVehicle("XYZ-9999");
+        // Sample transactions
+        system.addTransaction(new Transaction(1, 500, "StoreA", "acc1", System.currentTimeMillis()));
+        system.addTransaction(new Transaction(2, 300, "StoreB", "acc2", System.currentTimeMillis()));
+        system.addTransaction(new Transaction(3, 200, "StoreC", "acc3", System.currentTimeMillis()));
+        system.addTransaction(new Transaction(4, 500, "StoreA", "acc2", System.currentTimeMillis()));
 
-        parking.exitVehicle("ABC-1234");
-
-        System.out.println("Nearest free spot: #" + parking.findNearestSpot());
-
-        parking.getStatistics();
+        // Run features
+        system.findTwoSum(500);
+        system.findTwoSumWithTime(500);
+        system.findKSum(3, 1000);
+        system.detectDuplicates();
     }
 }
