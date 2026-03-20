@@ -2,105 +2,98 @@ import java.util.*;
 
 public class week1andweek2 {
 
-    // Stores username -> userId
-    private HashMap<String, Integer> userMap;
+    // n-gram -> set of document IDs
+    private HashMap<String, Set<String>> ngramIndex;
 
-    // Stores username -> number of attempts
-    private HashMap<String, Integer> attemptCount;
+    // document -> list of n-grams
+    private HashMap<String, List<String>> documentNgrams;
+
+    private int N = 5; // size of n-gram (5-gram)
 
     // Constructor
     public week1andweek2() {
-        userMap = new HashMap<>();
-        attemptCount = new HashMap<>();
+        ngramIndex = new HashMap<>();
+        documentNgrams = new HashMap<>();
     }
 
-    // Add existing user
-    public void addUser(String username, int userId) {
-        userMap.put(username, userId);
+    // Add document to database
+    public void addDocument(String docId, String text) {
+        List<String> ngrams = generateNgrams(text);
+        documentNgrams.put(docId, ngrams);
+
+        for (String gram : ngrams) {
+            ngramIndex.putIfAbsent(gram, new HashSet<>());
+            ngramIndex.get(gram).add(docId);
+        }
     }
 
-    // Check availability in O(1)
-    public boolean checkAvailability(String username) {
-        attemptCount.put(username, attemptCount.getOrDefault(username, 0) + 1);
-        return !userMap.containsKey(username);
-    }
+    // Generate n-grams
+    private List<String> generateNgrams(String text) {
+        List<String> ngrams = new ArrayList<>();
+        String[] words = text.toLowerCase().split("\\s+");
 
-    // Suggest alternatives
-    public List<String> suggestAlternatives(String username) {
-        List<String> suggestions = new ArrayList<>();
-
-        if (!userMap.containsKey(username)) {
-            suggestions.add(username);
-            return suggestions;
+        for (int i = 0; i <= words.length - N; i++) {
+            StringBuilder gram = new StringBuilder();
+            for (int j = 0; j < N; j++) {
+                gram.append(words[i + j]).append(" ");
+            }
+            ngrams.add(gram.toString().trim());
         }
 
-        // Add numbers
-        for (int i = 1; i <= 5; i++) {
-            String newName = username + i;
-            if (!userMap.containsKey(newName)) {
-                suggestions.add(newName);
+        return ngrams;
+    }
+
+    // Analyze document for plagiarism
+    public void analyzeDocument(String docId, String text) {
+        List<String> newDocNgrams = generateNgrams(text);
+
+        System.out.println("Extracted " + newDocNgrams.size() + " n-grams");
+
+        HashMap<String, Integer> matchCount = new HashMap<>();
+
+        // Find matching n-grams
+        for (String gram : newDocNgrams) {
+            if (ngramIndex.containsKey(gram)) {
+                for (String existingDoc : ngramIndex.get(gram)) {
+                    matchCount.put(existingDoc,
+                            matchCount.getOrDefault(existingDoc, 0) + 1);
+                }
             }
         }
 
-        // Replace underscore with dot
-        if (username.contains("_")) {
-            String dotName = username.replace("_", ".");
-            if (!userMap.containsKey(dotName)) {
-                suggestions.add(dotName);
+        // Calculate similarity
+        for (String doc : matchCount.keySet()) {
+            int matches = matchCount.get(doc);
+            double similarity = (matches * 100.0) / newDocNgrams.size();
+
+            System.out.println("→ Found " + matches +
+                    " matching n-grams with \"" + doc + "\"");
+            System.out.printf("→ Similarity: %.2f%% ", similarity);
+
+            if (similarity > 60) {
+                System.out.println("(PLAGIARISM DETECTED)");
+            } else if (similarity > 15) {
+                System.out.println("(suspicious)");
+            } else {
+                System.out.println("(safe)");
             }
         }
-
-        // Prefix and suffix
-        String prefix = "the_" + username;
-        if (!userMap.containsKey(prefix)) {
-            suggestions.add(prefix);
-        }
-
-        String suffix = username + "_official";
-        if (!userMap.containsKey(suffix)) {
-            suggestions.add(suffix);
-        }
-
-        return suggestions;
     }
 
-    // Get most attempted username
-    public String getMostAttempted() {
-        String maxUser = "";
-        int maxCount = 0;
-
-        for (String user : attemptCount.keySet()) {
-            int count = attemptCount.get(user);
-            if (count > maxCount) {
-                maxCount = count;
-                maxUser = user;
-            }
-        }
-
-        return maxUser + " (" + maxCount + " attempts)";
-    }
-
-    // Main method
+    // Main method (testing)
     public static void main(String[] args) {
         week1andweek2 system = new week1andweek2();
 
-        // Existing users
-        system.addUser("john_doe", 1);
-        system.addUser("admin", 2);
+        // Add existing documents
+        system.addDocument("essay_089.txt",
+                "data structures and algorithms are important in computer science");
 
-        // Availability check
-        System.out.println(system.checkAvailability("john_doe"));   // false
-        System.out.println(system.checkAvailability("jane_smith")); // true
+        system.addDocument("essay_092.txt",
+                "machine learning and data structures are important in computer science");
 
-        // Suggestions
-        System.out.println(system.suggestAlternatives("john_doe"));
+        // Analyze new document
+        String newEssay = "data structures and algorithms are important in computer science and machine learning";
 
-        // Simulate attempts
-        system.checkAvailability("admin");
-        system.checkAvailability("admin");
-        system.checkAvailability("admin");
-
-        // Most attempted
-        System.out.println(system.getMostAttempted());
+        system.analyzeDocument("essay_123.txt", newEssay);
     }
 }
