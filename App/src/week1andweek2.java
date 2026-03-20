@@ -2,98 +2,119 @@ import java.util.*;
 
 public class week1andweek2 {
 
-    // n-gram -> set of document IDs
-    private HashMap<String, Set<String>> ngramIndex;
+    // pageUrl -> total visit count
+    private HashMap<String, Integer> pageVisits;
 
-    // document -> list of n-grams
-    private HashMap<String, List<String>> documentNgrams;
+    // pageUrl -> unique users
+    private HashMap<String, Set<String>> uniqueVisitors;
 
-    private int N = 5; // size of n-gram (5-gram)
+    // source -> count
+    private HashMap<String, Integer> trafficSources;
 
     // Constructor
     public week1andweek2() {
-        ngramIndex = new HashMap<>();
-        documentNgrams = new HashMap<>();
+        pageVisits = new HashMap<>();
+        uniqueVisitors = new HashMap<>();
+        trafficSources = new HashMap<>();
     }
 
-    // Add document to database
-    public void addDocument(String docId, String text) {
-        List<String> ngrams = generateNgrams(text);
-        documentNgrams.put(docId, ngrams);
+    // Process incoming event
+    public void processEvent(String url, String userId, String source) {
 
-        for (String gram : ngrams) {
-            ngramIndex.putIfAbsent(gram, new HashSet<>());
-            ngramIndex.get(gram).add(docId);
+        // Update page visit count
+        pageVisits.put(url, pageVisits.getOrDefault(url, 0) + 1);
+
+        // Update unique visitors
+        uniqueVisitors.putIfAbsent(url, new HashSet<>());
+        uniqueVisitors.get(url).add(userId);
+
+        // Update traffic source count
+        trafficSources.put(source, trafficSources.getOrDefault(source, 0) + 1);
+    }
+
+    // Get Top 10 pages using PriorityQueue (Max Heap)
+    private List<Map.Entry<String, Integer>> getTopPages() {
+
+        PriorityQueue<Map.Entry<String, Integer>> pq =
+                new PriorityQueue<>((a, b) -> b.getValue() - a.getValue());
+
+        pq.addAll(pageVisits.entrySet());
+
+        List<Map.Entry<String, Integer>> topPages = new ArrayList<>();
+
+        int count = 0;
+        while (!pq.isEmpty() && count < 10) {
+            topPages.add(pq.poll());
+            count++;
         }
+
+        return topPages;
     }
 
-    // Generate n-grams
-    private List<String> generateNgrams(String text) {
-        List<String> ngrams = new ArrayList<>();
-        String[] words = text.toLowerCase().split("\\s+");
+    // Display dashboard
+    public void getDashboard() {
 
-        for (int i = 0; i <= words.length - N; i++) {
-            StringBuilder gram = new StringBuilder();
-            for (int j = 0; j < N; j++) {
-                gram.append(words[i + j]).append(" ");
+        System.out.println("\n===== REAL-TIME DASHBOARD =====");
+
+        // Top Pages
+        System.out.println("\nTop Pages:");
+        List<Map.Entry<String, Integer>> topPages = getTopPages();
+
+        int rank = 1;
+        for (Map.Entry<String, Integer> entry : topPages) {
+            String url = entry.getKey();
+            int visits = entry.getValue();
+            int unique = uniqueVisitors.get(url).size();
+
+            System.out.println(rank + ". " + url +
+                    " - " + visits + " views (" + unique + " unique)");
+            rank++;
+        }
+
+        // Traffic Sources
+        System.out.println("\nTraffic Sources:");
+        int total = 0;
+        for (int count : trafficSources.values()) {
+            total += count;
+        }
+
+        for (String source : trafficSources.keySet()) {
+            int count = trafficSources.get(source);
+            double percent = (count * 100.0) / total;
+
+            System.out.printf("%s: %.2f%%\n", source, percent);
+        }
+
+        System.out.println("================================\n");
+    }
+
+    // Simulate real-time updates every 5 seconds
+    public void startDashboard() {
+        while (true) {
+            getDashboard();
+            try {
+                Thread.sleep(5000); // 5 seconds
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-            ngrams.add(gram.toString().trim());
-        }
-
-        return ngrams;
-    }
-
-    // Analyze document for plagiarism
-    public void analyzeDocument(String docId, String text) {
-        List<String> newDocNgrams = generateNgrams(text);
-
-        System.out.println("Extracted " + newDocNgrams.size() + " n-grams");
-
-        HashMap<String, Integer> matchCount = new HashMap<>();
-
-        // Find matching n-grams
-        for (String gram : newDocNgrams) {
-            if (ngramIndex.containsKey(gram)) {
-                for (String existingDoc : ngramIndex.get(gram)) {
-                    matchCount.put(existingDoc,
-                            matchCount.getOrDefault(existingDoc, 0) + 1);
-                }
-            }
-        }
-
-        // Calculate similarity
-        for (String doc : matchCount.keySet()) {
-            int matches = matchCount.get(doc);
-            double similarity = (matches * 100.0) / newDocNgrams.size();
-
-            System.out.println("→ Found " + matches +
-                    " matching n-grams with \"" + doc + "\"");
-            System.out.printf("→ Similarity: %.2f%% ", similarity);
-
-            if (similarity > 60) {
-                System.out.println("(PLAGIARISM DETECTED)");
-            } else if (similarity > 15) {
-                System.out.println("(suspicious)");
-            } else {
-                System.out.println("(safe)");
-            }
         }
     }
 
-    // Main method (testing)
+    // Main method
     public static void main(String[] args) {
+
         week1andweek2 system = new week1andweek2();
 
-        // Add existing documents
-        system.addDocument("essay_089.txt",
-                "data structures and algorithms are important in computer science");
+        // Simulated events
+        system.processEvent("/article/breaking-news", "user_123", "google");
+        system.processEvent("/article/breaking-news", "user_456", "facebook");
+        system.processEvent("/sports/championship", "user_789", "direct");
+        system.processEvent("/article/breaking-news", "user_123", "google");
+        system.processEvent("/sports/championship", "user_111", "google");
+        system.processEvent("/tech/ai", "user_222", "direct");
+        system.processEvent("/tech/ai", "user_333", "facebook");
 
-        system.addDocument("essay_092.txt",
-                "machine learning and data structures are important in computer science");
-
-        // Analyze new document
-        String newEssay = "data structures and algorithms are important in computer science and machine learning";
-
-        system.analyzeDocument("essay_123.txt", newEssay);
+        // Start dashboard (updates every 5 sec)
+        system.startDashboard();
     }
 }
