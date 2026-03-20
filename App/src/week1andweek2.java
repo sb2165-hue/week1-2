@@ -2,119 +2,111 @@ import java.util.*;
 
 public class week1andweek2 {
 
-    // pageUrl -> total visit count
-    private HashMap<String, Integer> pageVisits;
+    // Token Bucket class
+    class TokenBucket {
+        int tokens;
+        int maxTokens;
+        long lastRefillTime; // in milliseconds
+        int refillRate; // tokens per hour
 
-    // pageUrl -> unique users
-    private HashMap<String, Set<String>> uniqueVisitors;
+        public TokenBucket(int maxTokens, int refillRate) {
+            this.maxTokens = maxTokens;
+            this.tokens = maxTokens;
+            this.refillRate = refillRate;
+            this.lastRefillTime = System.currentTimeMillis();
+        }
 
-    // source -> count
-    private HashMap<String, Integer> trafficSources;
+        // Refill tokens based on time passed
+        public void refill() {
+            long now = System.currentTimeMillis();
+            long elapsedTime = now - lastRefillTime;
+
+            // Convert time to hours
+            double hoursPassed = elapsedTime / (1000.0 * 60 * 60);
+
+            int tokensToAdd = (int) (hoursPassed * refillRate);
+
+            if (tokensToAdd > 0) {
+                tokens = Math.min(maxTokens, tokens + tokensToAdd);
+                lastRefillTime = now;
+            }
+        }
+    }
+
+    // clientId -> TokenBucket
+    private HashMap<String, TokenBucket> clientBuckets;
+
+    private final int MAX_REQUESTS = 1000;
+    private final int REFILL_RATE = 1000; // per hour
 
     // Constructor
     public week1andweek2() {
-        pageVisits = new HashMap<>();
-        uniqueVisitors = new HashMap<>();
-        trafficSources = new HashMap<>();
+        clientBuckets = new HashMap<>();
     }
 
-    // Process incoming event
-    public void processEvent(String url, String userId, String source) {
+    // Check rate limit
+    public String checkRateLimit(String clientId) {
 
-        // Update page visit count
-        pageVisits.put(url, pageVisits.getOrDefault(url, 0) + 1);
+        clientBuckets.putIfAbsent(clientId,
+                new TokenBucket(MAX_REQUESTS, REFILL_RATE));
 
-        // Update unique visitors
-        uniqueVisitors.putIfAbsent(url, new HashSet<>());
-        uniqueVisitors.get(url).add(userId);
+        TokenBucket bucket = clientBuckets.get(clientId);
 
-        // Update traffic source count
-        trafficSources.put(source, trafficSources.getOrDefault(source, 0) + 1);
+        // Refill tokens
+        bucket.refill();
+
+        if (bucket.tokens > 0) {
+            bucket.tokens--;
+            return "Allowed (" + bucket.tokens + " requests remaining)";
+        } else {
+            long now = System.currentTimeMillis();
+            long nextRefill = bucket.lastRefillTime + (60 * 60 * 1000);
+            long retryAfter = (nextRefill - now) / 1000;
+
+            return "Denied (0 requests remaining, retry after "
+                    + retryAfter + "s)";
+        }
     }
 
-    // Get Top 10 pages using PriorityQueue (Max Heap)
-    private List<Map.Entry<String, Integer>> getTopPages() {
+    // Get current status
+    public String getRateLimitStatus(String clientId) {
 
-        PriorityQueue<Map.Entry<String, Integer>> pq =
-                new PriorityQueue<>((a, b) -> b.getValue() - a.getValue());
-
-        pq.addAll(pageVisits.entrySet());
-
-        List<Map.Entry<String, Integer>> topPages = new ArrayList<>();
-
-        int count = 0;
-        while (!pq.isEmpty() && count < 10) {
-            topPages.add(pq.poll());
-            count++;
+        if (!clientBuckets.containsKey(clientId)) {
+            return "No data for client";
         }
 
-        return topPages;
-    }
+        TokenBucket bucket = clientBuckets.get(clientId);
+        bucket.refill();
 
-    // Display dashboard
-    public void getDashboard() {
+        int used = MAX_REQUESTS - bucket.tokens;
 
-        System.out.println("\n===== REAL-TIME DASHBOARD =====");
+        long resetTime = bucket.lastRefillTime + (60 * 60 * 1000);
 
-        // Top Pages
-        System.out.println("\nTop Pages:");
-        List<Map.Entry<String, Integer>> topPages = getTopPages();
-
-        int rank = 1;
-        for (Map.Entry<String, Integer> entry : topPages) {
-            String url = entry.getKey();
-            int visits = entry.getValue();
-            int unique = uniqueVisitors.get(url).size();
-
-            System.out.println(rank + ". " + url +
-                    " - " + visits + " views (" + unique + " unique)");
-            rank++;
-        }
-
-        // Traffic Sources
-        System.out.println("\nTraffic Sources:");
-        int total = 0;
-        for (int count : trafficSources.values()) {
-            total += count;
-        }
-
-        for (String source : trafficSources.keySet()) {
-            int count = trafficSources.get(source);
-            double percent = (count * 100.0) / total;
-
-            System.out.printf("%s: %.2f%%\n", source, percent);
-        }
-
-        System.out.println("================================\n");
-    }
-
-    // Simulate real-time updates every 5 seconds
-    public void startDashboard() {
-        while (true) {
-            getDashboard();
-            try {
-                Thread.sleep(5000); // 5 seconds
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
+        return "{used: " + used +
+                ", limit: " + MAX_REQUESTS +
+                ", reset: " + (resetTime / 1000) + "}";
     }
 
     // Main method
     public static void main(String[] args) {
 
-        week1andweek2 system = new week1andweek2();
+        week1andweek2 limiter = new week1andweek2();
 
-        // Simulated events
-        system.processEvent("/article/breaking-news", "user_123", "google");
-        system.processEvent("/article/breaking-news", "user_456", "facebook");
-        system.processEvent("/sports/championship", "user_789", "direct");
-        system.processEvent("/article/breaking-news", "user_123", "google");
-        system.processEvent("/sports/championship", "user_111", "google");
-        system.processEvent("/tech/ai", "user_222", "direct");
-        system.processEvent("/tech/ai", "user_333", "facebook");
+        String client = "abc123";
 
-        // Start dashboard (updates every 5 sec)
-        system.startDashboard();
+        // Simulate requests
+        for (int i = 0; i < 5; i++) {
+            System.out.println(limiter.checkRateLimit(client));
+        }
+
+        // Simulate limit exceed
+        for (int i = 0; i < 1000; i++) {
+            limiter.checkRateLimit(client);
+        }
+
+        System.out.println(limiter.checkRateLimit(client)); // should deny
+
+        // Get status
+        System.out.println(limiter.getRateLimitStatus(client));
     }
 }
