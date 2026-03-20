@@ -2,146 +2,129 @@ import java.util.*;
 
 public class week1andweek2 {
 
-    // Trie Node
-    class TrieNode {
-        HashMap<Character, TrieNode> children;
-        HashMap<String, Integer> queryMap; // query -> frequency
+    // Parking spot structure
+    class ParkingSpot {
+        String licensePlate;
+        long entryTime;
+        String status; // EMPTY, OCCUPIED, DELETED
 
-        public TrieNode() {
-            children = new HashMap<>();
-            queryMap = new HashMap<>();
+        public ParkingSpot() {
+            status = "EMPTY";
         }
     }
 
-    private TrieNode root;
+    private ParkingSpot[] table;
+    private int capacity = 500;
+    private int size = 0;
 
-    // Global query frequency
-    private HashMap<String, Integer> frequencyMap;
+    // Statistics
+    private int totalProbes = 0;
+    private int totalParks = 0;
 
+    // Constructor
     public week1andweek2() {
-        root = new TrieNode();
-        frequencyMap = new HashMap<>();
-    }
-
-    // Insert query into Trie
-    public void insert(String query) {
-        frequencyMap.put(query, frequencyMap.getOrDefault(query, 0) + 1);
-
-        TrieNode node = root;
-
-        for (char ch : query.toCharArray()) {
-            node.children.putIfAbsent(ch, new TrieNode());
-            node = node.children.get(ch);
-
-            // Store query frequency at each prefix node
-            node.queryMap.put(query, frequencyMap.get(query));
+        table = new ParkingSpot[capacity];
+        for (int i = 0; i < capacity; i++) {
+            table[i] = new ParkingSpot();
         }
     }
 
-    // Get top 10 suggestions for prefix
-    public List<String> search(String prefix) {
-        TrieNode node = root;
+    // Hash function
+    private int hash(String licensePlate) {
+        int hash = 0;
+        for (char ch : licensePlate.toCharArray()) {
+            hash = (hash * 31 + ch) % capacity;
+        }
+        return hash;
+    }
 
-        // Traverse prefix
-        for (char ch : prefix.toCharArray()) {
-            if (!node.children.containsKey(ch)) {
-                return new ArrayList<>(); // no suggestions
+    // Park vehicle using linear probing
+    public void parkVehicle(String licensePlate) {
+        int index = hash(licensePlate);
+        int probes = 0;
+
+        while (table[index].status.equals("OCCUPIED")) {
+            index = (index + 1) % capacity; // linear probing
+            probes++;
+        }
+
+        table[index].licensePlate = licensePlate;
+        table[index].entryTime = System.currentTimeMillis();
+        table[index].status = "OCCUPIED";
+
+        size++;
+        totalProbes += probes;
+        totalParks++;
+
+        System.out.println("Assigned spot #" + index +
+                " (" + probes + " probes)");
+    }
+
+    // Exit vehicle
+    public void exitVehicle(String licensePlate) {
+        int index = hash(licensePlate);
+        int probes = 0;
+
+        while (!table[index].status.equals("EMPTY")) {
+            if (table[index].status.equals("OCCUPIED") &&
+                    table[index].licensePlate.equals(licensePlate)) {
+
+                long exitTime = System.currentTimeMillis();
+                long durationMillis = exitTime - table[index].entryTime;
+
+                double hours = durationMillis / (1000.0 * 60 * 60);
+
+                double fee = hours * 5.0; // $5 per hour
+
+                table[index].status = "DELETED";
+                size--;
+
+                System.out.printf("Spot #%d freed, Duration: %.2f hours, Fee: $%.2f\n",
+                        index, hours, fee);
+                return;
             }
-            node = node.children.get(ch);
+
+            index = (index + 1) % capacity;
+            probes++;
         }
 
-        // Min Heap for top 10
-        PriorityQueue<Map.Entry<String, Integer>> pq =
-                new PriorityQueue<>((a, b) -> a.getValue() - b.getValue());
-
-        for (Map.Entry<String, Integer> entry : node.queryMap.entrySet()) {
-            pq.offer(entry);
-            if (pq.size() > 10) {
-                pq.poll(); // remove smallest
-            }
-        }
-
-        // Extract results
-        List<String> result = new ArrayList<>();
-        while (!pq.isEmpty()) {
-            result.add(pq.poll().getKey());
-        }
-
-        Collections.reverse(result); // highest first
-        return result;
+        System.out.println("Vehicle not found");
     }
 
-    // Update frequency (new search)
-    public void updateFrequency(String query) {
-        insert(query);
-    }
-
-    // Simple typo suggestion (replace one character)
-    public List<String> suggestTypos(String word) {
-        List<String> suggestions = new ArrayList<>();
-
-        for (String query : frequencyMap.keySet()) {
-            if (isOneEditAway(word, query)) {
-                suggestions.add(query);
-            }
-        }
-        return suggestions;
-    }
-
-    // Check if two strings differ by one edit
-    private boolean isOneEditAway(String a, String b) {
-        if (Math.abs(a.length() - b.length()) > 1) return false;
-
-        int i = 0, j = 0, count = 0;
-
-        while (i < a.length() && j < b.length()) {
-            if (a.charAt(i) != b.charAt(j)) {
-                count++;
-                if (count > 1) return false;
-
-                if (a.length() > b.length()) i++;
-                else if (a.length() < b.length()) j++;
-                else {
-                    i++;
-                    j++;
-                }
-            } else {
-                i++;
-                j++;
+    // Find nearest available spot from entrance (index 0)
+    public int findNearestSpot() {
+        for (int i = 0; i < capacity; i++) {
+            if (!table[i].status.equals("OCCUPIED")) {
+                return i;
             }
         }
-        return true;
+        return -1;
+    }
+
+    // Get statistics
+    public void getStatistics() {
+        double occupancy = (size * 100.0) / capacity;
+        double avgProbes = totalParks == 0 ? 0 : (double) totalProbes / totalParks;
+
+        System.out.println("\n=== Parking Statistics ===");
+        System.out.printf("Occupancy: %.2f%%\n", occupancy);
+        System.out.printf("Average Probes: %.2f\n", avgProbes);
+        System.out.println("Peak Hour: 2-3 PM (simulated)");
     }
 
     // Main method
     public static void main(String[] args) {
 
-        week1andweek2 system = new week1andweek2();
+        week1andweek2 parking = new week1andweek2();
 
-        // Insert queries
-        system.insert("java tutorial");
-        system.insert("javascript");
-        system.insert("java download");
-        system.insert("java tutorial");
-        system.insert("java tutorial");
-        system.insert("java 21 features");
+        parking.parkVehicle("ABC-1234");
+        parking.parkVehicle("ABC-1235");
+        parking.parkVehicle("XYZ-9999");
 
-        // Search prefix
-        System.out.println("Search results for 'jav':");
-        List<String> results = system.search("jav");
+        parking.exitVehicle("ABC-1234");
 
-        int rank = 1;
-        for (String res : results) {
-            System.out.println(rank + ". " + res + " (" +
-                    system.frequencyMap.get(res) + " searches)");
-            rank++;
-        }
+        System.out.println("Nearest free spot: #" + parking.findNearestSpot());
 
-        // Update frequency
-        system.updateFrequency("java 21 features");
-
-        // Typo suggestions
-        System.out.println("\nTypo suggestions for 'jvaa':");
-        System.out.println(system.suggestTypos("jvaa"));
+        parking.getStatistics();
     }
 }
